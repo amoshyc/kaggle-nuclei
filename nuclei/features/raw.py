@@ -23,7 +23,7 @@ def read_masks(img_paths, size=(448, 448), pbar=True):
     if pbar:
         img_paths = tqdm(img_paths, desc='Reading Masks')
 
-    xs = np.zeros((len(img_paths), *size, 1), dtype=np.float32)
+    ys = np.zeros((len(img_paths), *size, 1), dtype=np.float32)
     for i, img_p in enumerate(img_paths):
         mask_paths = img_p.parent.parent.glob('masks/*.png')
         for mask_p in mask_paths:
@@ -32,6 +32,6 @@ def read_masks(img_paths, size=(448, 448), pbar=True):
                 img = img.convert('L')
             img = img.resize(size)
             img = np.uint8(img)
-            xs[i, img > 0, 0] = 1.0
+            ys[i, img > 0, 0] = 1.0
 
-    return xs
+    return ys

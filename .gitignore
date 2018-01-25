@@ -104,3 +104,4 @@ ENV/
 temp/
 data/
 ckpt/
+nohup.out
