@@ -35,3 +35,6 @@ def read_masks(img_paths, size=(448, 448), pbar=True):
             ys[i, img > 0, 0] = 1.0
 
     return ys
+
+
+def fuse_masks(masks):

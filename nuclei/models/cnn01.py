@@ -1,11 +1,16 @@
+from keras import backend as K
 from keras.models import Model, load_model
 from keras.layers import *
+from keras.losses import *
 from keras.optimizers import *
 from keras.callbacks import CSVLogger, ModelCheckpoint
 
 from ..utils.ckpt import new_ckpt_path
 from ..callbacks.plotloss import PlotLoss
 from ..callbacks.pred import Prediction
+
+
+masks = 
 
 
 def __conv(c, k, act='relu'):
@@ -22,31 +27,56 @@ def __conv(c, k, act='relu'):
 def model(size=(448, 448)):
     inp = Input(shape=size + (3, ))
 
-    x = __conv(8, (5, 5))(inp)
-    x = __conv(8, (5, 5))(x)
-    x = MaxPooling2D((2, 2))(x)
-
+    x = __conv(16, (3, 3))(inp)
     x = __conv(16, (3, 3))(x)
     x = __conv(16, (3, 3))(x)
-    x = MaxPooling2D((2, 2))(x)
+    out1 = MaxPooling2D((2, 2))(x)
 
+    x = __conv(32, (3, 3))(out1)
+    x = __conv(32, (3, 3))(x)
+    x = __conv(32, (3, 3))(x)
+    out2 = MaxPooling2D((2, 2))(x)
+
+    x = __conv(64, (1, 1))(out2)
+    out1 = __conv(16, (3, 3))(out1)
+    out2 = __conv(32, (3, 3))(out2)
+
+    up2 = UpSampling2D(x)
+    x = Concatenate()([up2, out2])
+    x = __conv(32, (3, 3))(x)
+    x = __conv(32, (3, 3))(x)
     x = __conv(32, (3, 3))(x)
 
+    up1 = UpSampling2D((2, 2))(x)
+    x = Concatenate()([up1, out1])
     x = __conv(16, (3, 3))(x)
     x = __conv(16, (3, 3))(x)
-    x = UpSampling2D((2, 2))(x)
-    x = __conv(8, (5, 5))(x)
-    x = __conv(8, (5, 5))(x)
-    x = UpSampling2D((2, 2))(x)
+    x = __conv(16, (3, 3))(x)
 
-    out = __conv(1, (3, 3), act='sigmoid')(x)
+    out = __conv(2, (3, 3), act='linear')(x)
 
     return Model(inputs=inp, outputs=out)
 
 
+def ae_loss(y_true, y_pred):
+    global masks
+
+    tag = y_pred[..., 0]
+    heatmap = K.sigmoid(y_pred[..., 0])
+    loss_mse = mean_squared_error(y_true, heatmap)
+    
+    res = list([K.mean(tag[mask > 0]) for mask in masks])
+    loss_person = K.mean([K.square(tag[mask > 0] - re) for mask, re in zip(masks, res)])
+    loss_people = K.mean(K.exp((-1/2) * (re1 - re2)) for re1 in res for re2 in res)
+    loss_group = loss_person + loss_people
+
+    loss = loss_mes + 0.1 * loss_group
+    return loss
+
+
 def train(model, xt, yt, xv, yv):
     compile_arg = {
-        'loss': 'binary_crossentropy',
+        'loss': ae_loss,
         'optimizer': 'adam',
     }
     model.compile(**compile_arg)

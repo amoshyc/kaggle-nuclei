@@ -20,18 +20,21 @@ from nuclei.features import clahe
 from nuclei.features import raw
 from nuclei.models import cnn01
 
-img_paths = list(config.TRAIN1.glob('*/images/*.png'))
-xs = raw.read_imgs(img_paths)
-ys = raw.read_masks(img_paths)
-# np.savez('./data/data.npz', xs=xs, ys=ys)
+# img_paths = list(config.TRAIN1.glob('*/images/*.png'))
+# xs = raw.read_imgs(img_paths)
+# ys = raw.read_masks(img_paths)
+# # np.savez('./data/data.npz', xs=xs, ys=ys)
 
-# data = np.load('./data/data.npz')
-# xs = data['xs']
-# ys = data['ys']
+# # data = np.load('./data/data.npz')
+# # xs = data['xs']
+# # ys = data['ys']
 
-xt, xv, yt, yv = train_test_split(xs, ys, test_size=0.2)
+# xt, xv, yt, yv = train_test_split(xs, ys, test_size=0.2)
 
-model = cnn01.model()
+# model = cnn01.model()
 
-cnn01.train(model, xt, yt, xv, yv)
+# cnn01.train(model, xt, yt, xv, yv)
 
+x = np.zeros((10, 10), dtype=np.float32)
+x[2:5, 1:3] = 1.0
+print(convert.cm_to_rle(x))
