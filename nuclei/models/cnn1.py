@@ -2,11 +2,16 @@ import math
 from collections import OrderedDict
 from tqdm import tqdm
 
+import numpy as np
+
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+from ..utils import ckpt
+from ..utils import convert
 
 
 class Net(nn.Module):
@@ -51,10 +56,13 @@ def train(net, xt, yt, xv, yv):
     batch_size = 30
     n_epochs = 250
 
-    print(net)
+    # print(net)
     net = net.cuda()
     optimizer = optim.Adam(net.parameters())
     criterion = nn.BCELoss()
+
+    ckpt_dir = ckpt.new_dir()
+    print('CKPT:', ckpt_dir)
 
     for ep in range(n_epochs):
         pbar = tqdm(total=len(xt), desc=f'Epoch {ep:03d}', ascii=True)
@@ -78,12 +86,30 @@ def train(net, xt, yt, xv, yv):
         net.eval()
         msg.update(OrderedDict({'val_loss': 0.0}))
         for i, xb, yb in split(xv, yv, batch_size):
-            xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=True)
+            xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=False)
             yb = Variable(torch.from_numpy(yb).cuda(), requires_grad=False)
 
             yp = net(xb)
-            loss = heatmap_loss(yp, yb)
+            loss = criterion(yp, yb)
             
             msg['val_loss'] = (msg['val_loss'] * i + loss.data[0]) / (i + 1)
         pbar.set_postfix(**msg)
+
+        epoch_dir = ckpt_dir / f'{ep:03d}'
+        epoch_dir.mkdir()
+        xc, yc = xv[:20], yv[:20]
+        xc_var = Variable(torch.from_numpy(xc).cuda(), requires_grad=False)
+        yp = net(xc_var).data.cpu().numpy()
+        xc = np.transpose(xc, [0, 2, 3, 1])
+        yc = np.transpose(yc, [0, 2, 3, 1])
+        yp = np.transpose(yp, [0, 2, 3, 1])
+        for i in range(len(xb)):
+            img = xc[i]
+            truth = convert.colorize(yc[i], cmap='white')
+            pred = convert.colorize(yp[i], cmap='orange')
+
+            vis = np.hstack([img, truth, pred])
+            vis = convert.to_pil_img(vis)
+            vis.save(str(epoch_dir / f'{i:03d}.jpg'))
+
         pbar.close()
