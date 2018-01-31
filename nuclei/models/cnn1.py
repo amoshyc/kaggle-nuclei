@@ -1,8 +1,9 @@
 import math
-from collections import OrderedDict
 from tqdm import tqdm
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 import torch
 from torch.autograd import Variable
@@ -56,7 +57,7 @@ def train(net, xt, yt, xv, yv):
     batch_size = 30
     n_epochs = 250
 
-    # print(net)
+    print(net)
     net = net.cuda()
     optimizer = optim.Adam(net.parameters())
     criterion = nn.BCELoss()
@@ -64,11 +65,9 @@ def train(net, xt, yt, xv, yv):
     ckpt_dir = ckpt.new_dir()
     print('CKPT:', ckpt_dir)
 
-    for ep in range(n_epochs):
-        pbar = tqdm(total=len(xt), desc=f'Epoch {ep:03d}', ascii=True)
-
+    def __train(ep, msg, pbar):
         net.train()
-        msg = OrderedDict({'loss': 0.0})
+        msg.update({'loss': 0.0})
         for i, xb, yb in split(xt, yt, batch_size):
             xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=True)
             yb = Variable(torch.from_numpy(yb).cuda(), requires_grad=False)
@@ -83,18 +82,20 @@ def train(net, xt, yt, xv, yv):
             pbar.set_postfix(**msg)
             pbar.update(batch_size)
 
+    def __valid(ep, msg, pbar):
         net.eval()
-        msg.update(OrderedDict({'val_loss': 0.0}))
+        msg.update({'val_loss': 0.0})
         for i, xb, yb in split(xv, yv, batch_size):
             xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=False)
             yb = Variable(torch.from_numpy(yb).cuda(), requires_grad=False)
 
             yp = net(xb)
             loss = criterion(yp, yb)
-            
+
             msg['val_loss'] = (msg['val_loss'] * i + loss.data[0]) / (i + 1)
         pbar.set_postfix(**msg)
 
+    def __vis(ep, msg, pbar):
         epoch_dir = ckpt_dir / f'{ep:03d}'
         epoch_dir.mkdir()
         xc, yc = xv[:20], yv[:20]
@@ -103,7 +104,7 @@ def train(net, xt, yt, xv, yv):
         xc = np.transpose(xc, [0, 2, 3, 1])
         yc = np.transpose(yc, [0, 2, 3, 1])
         yp = np.transpose(yp, [0, 2, 3, 1])
-        for i in range(len(xb)):
+        for i in range(len(xc)):
             img = xc[i]
             truth = convert.colorize(yc[i], cmap='white')
             pred = convert.colorize(yp[i], cmap='orange')
@@ -112,4 +113,27 @@ def train(net, xt, yt, xv, yv):
             vis = convert.to_pil_img(vis)
             vis.save(str(epoch_dir / f'{i:03d}.jpg'))
 
-        pbar.close()
+    def __plot(ep, msg, pbar):
+        try:
+            __plot.log[ep] = msg
+        except AttributeError:
+            __plot.log = {ep: msg}
+
+        df = pd.DataFrame.from_dict(__plot.log, orient='index')
+        df.to_csv(str(ckpt_dir / 'log.csv'), index_label='epoch')
+
+        fig, ax = plt.subplots(dpi=150)
+        df.plot(kind='line', ax=ax)
+        ax.set_xlabel('epoch')
+        ax.set_ylabel('loss')
+        fig.tight_layout()
+        fig.savefig(str(ckpt_dir / 'loss.png'))
+        plt.close()
+
+    for ep in range(n_epochs):
+        with tqdm(total=len(xt), desc=f'Epoch {ep:03d}', ascii=True) as pbar:
+            msg = dict()
+            __train(ep, msg, pbar)
+            __valid(ep, msg, pbar)
+            __vis(ep, msg, pbar)
+            __plot(ep, msg, pbar)

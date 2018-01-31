@@ -16,7 +16,7 @@ from nuclei.features.raw import *
 from nuclei.models import cnn1
 
 
-img_paths = list(config.TRAIN1.glob('*/images/*.png'))
+img_paths = list(config.TRAIN1.glob('*/images/*.png'))[:200]
 xs, ss = read_imgs(img_paths)
 ms = read_masks(img_paths)
 ys = fuse_masks(ms)
