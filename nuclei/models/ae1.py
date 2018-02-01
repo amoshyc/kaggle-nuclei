@@ -22,19 +22,42 @@ class Net(nn.Module):
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 8, (3, 3), padding=1),
             nn.ReLU(),
+            nn.Conv2d(8, 8, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(8),
+            nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Conv2d(8, 16, (3, 3), padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(2), )
-        self.center = nn.Sequential(
             nn.Conv2d(16, 16, (3, 3), padding=1),
-            nn.ReLU(), )
+            nn.ReLU(),
+            nn.BatchNorm2d(16),
+            nn.MaxPool2d(2),
+        )
+        self.center = nn.Sequential(
+            nn.Conv2d(16, 32, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(32),
+        )
         self.decoder = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(32, 16, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(16),
             nn.Upsample(scale_factor=2, mode='bilinear'),
             nn.Conv2d(16, 8, (3, 3), padding=1),
             nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear'),
-            nn.Conv2d(8, 2, (3, 3), padding=1),)
+            nn.Conv2d(8, 8, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(8),
+            nn.Conv2d(8, 2, (3, 3), padding=1),
+            nn.ReLU(),
+            nn.Conv2d(2, 2, (3, 3), padding=1),
+        )
 
     def forward(self, x):
         x = self.encoder(x)
@@ -81,8 +104,7 @@ def train(net, xt, yt, mt, ct, xv, yv, mv, cv):
             heatmap, tag_map = net(xb)
 
             loss_hm = hm_loss(heatmap, yb[:, 0, ...])
-            loss_tag = tag_loss(tag_map, cb, pbar=False)
-            # print(loss_tag)
+            loss_tag = tag_loss(tag_map, cb)
             loss = loss_hm + loss_tag
             loss.backward()
             optimizer.step()
@@ -96,45 +118,27 @@ def train(net, xt, yt, mt, ct, xv, yv, mv, cv):
     def __valid(ep, msg, pbar):
         net.eval()
         msg.update({'val_loss': 0.0, 'val_loss_hm': 0.0, 'val_loss_tag': 0.0})
-        for i, xb, yb in split(xv, yv, mv, batch_size):
-            xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=False)
+        for i, xb, yb, mb, cb in split(xv, yv, mv, cv, batch_size):
+            xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=True)
             yb = Variable(torch.from_numpy(yb).cuda(), requires_grad=False)
 
-            yp = net(xb)
-            loss_hm = hm_loss(yp[:, 0, ...], yb[:, 0, ...])
-            loss_tag = tag_loss(yp[:, 1, ...], mb)
-            loss = loss_hm + 0.5 * loss_tag
+            heatmap, tag_map = net(xb)
+            loss_hm = hm_loss(heatmap, yb[:, 0, ...])
+            loss_tag = tag_loss(tag_map, cb)
+            loss = loss_hm + loss_tag
 
             msg['val_loss'] = (msg['val_loss'] * i + loss.data[0]) / (i + 1)
             msg['val_loss_hm'] = (msg['val_loss_hm'] * i + loss_hm.data[0]) / (i + 1)
             msg['val_loss_tag'] = (msg['val_loss_tag'] * i + loss_tag.data[0]) / (i + 1)
         pbar.set_postfix(**msg)
 
-    def __vis(ep, msg, pbar):
-        epoch_dir = ckpt_dir / f'{ep:03d}'
-        epoch_dir.mkdir()
-        xc, yc = xv[:20], yv[:20]
-        xc_var = Variable(torch.from_numpy(xc).cuda(), requires_grad=False)
-        yp = net(xc_var).data.cpu().numpy()
-        xc = np.transpose(xc, [0, 2, 3, 1])
-        yc = np.transpose(yc, [0, 2, 3, 1])
-        yp = np.transpose(yp, [0, 2, 3, 1])
-        for i in range(len(xc)):
-            img = xc[i]
-            truth = convert.colorize(yc[i], cmap='white')
-            pred = convert.colorize(yp[i], cmap='orange')
-
-            vis = np.hstack([img, truth, pred])
-            vis = convert.to_pil_img(vis)
-            vis.save(str(epoch_dir / f'{i:03d}.jpg'))
-
     def __log(ep, msg, pbar):
         try:
-            __plot.log[ep] = msg
+            __log.log[ep] = msg
         except AttributeError:
-            __plot.log = {ep: msg}
+            __log.log = {ep: msg}
 
-        df = pd.DataFrame.from_dict(__plot.log, orient='index')
+        df = pd.DataFrame.from_dict(__log.log, orient='index')
         df.to_csv(str(ckpt_dir / 'log.csv'), index_label='epoch')
 
         fig, ax = plt.subplots(dpi=150)
@@ -145,10 +149,35 @@ def train(net, xt, yt, mt, ct, xv, yv, mv, cv):
         fig.savefig(str(ckpt_dir / 'loss.png'))
         plt.close()
 
+    def __vis(ep, msg, pbar):
+        epoch_dir = ckpt_dir / f'{ep:03d}'
+        epoch_dir.mkdir()
+        n_samples = 20
+        xc, yc = xv[:n_samples], yv[:n_samples]
+        xc_var = Variable(torch.from_numpy(xc).cuda(), requires_grad=False)
+        heatmap, tag_map = net(xc_var)
+        heatmap = heatmap.data.cpu().numpy()
+        tag_map = tag_map.data.cpu().numpy()
+        xc = np.transpose(xc, [0, 2, 3, 1])
+        yc = np.transpose(yc, [0, 2, 3, 1])
+        tag_map /= tag_map.max()
+        for i in range(n_samples):
+            fig, ax = plt.subplots(2, 2, dpi=100)
+            ax[0, 0].imshow(xc[i])
+            ax[0, 1].imshow(yc[i, ..., 0], cmap='gray')
+            ax[1, 0].imshow(heatmap[i], cmap='jet')
+            ax[1, 1].imshow(tag_map[i], cmap='viridis')
+            for r in range(2):
+                for c in range(2):
+                    ax[r, c].axis('off')
+            fig.tight_layout()
+            fig.savefig(str(epoch_dir / f'vis{i:03d}.jpg'))
+            plt.close()
+
     for ep in range(n_epochs):
         with tqdm(total=len(xt), desc=f'Epoch {ep:03d}', ascii=True) as pbar:
             msg = dict()
             __train(ep, msg, pbar)
-            # __valid(ep, msg, pbar)
-            # __vis(ep, msg, pbar)
-            # __log(ep, msg, pbar)
+            __valid(ep, msg, pbar)
+            __log(ep, msg, pbar)
+            __vis(ep, msg, pbar)

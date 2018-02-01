@@ -18,7 +18,7 @@ img_paths = list(config.TRAIN1.glob('*/images/*.png'))
 xs, ss = read_imgs(img_paths)
 ms = read_masks(img_paths)
 ys = fuse_masks(ms)
-cs = sample_points(ms, n_points=10)
+cs = sample_points(ms, n_points=25)
 
 
 xs = np.transpose(xs, (0, 3, 1, 2))
