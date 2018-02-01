@@ -13,6 +13,7 @@ import torch.optim as optim
 
 from ..utils import ckpt
 from ..utils import convert
+from ..loss.ae import tag_loss
 
 
 class Net(nn.Module):
@@ -33,28 +34,30 @@ class Net(nn.Module):
             nn.Conv2d(16, 8, (3, 3), padding=1),
             nn.ReLU(),
             nn.Upsample(scale_factor=2, mode='bilinear'),
-            nn.Conv2d(8, 2, (3, 3), padding=1),
-            nn.Sigmoid(), )
+            nn.Conv2d(8, 2, (3, 3), padding=1),)
 
     def forward(self, x):
         x = self.encoder(x)
         x = self.center(x)
         x = self.decoder(x)
-        return x
+        heatmap = F.sigmoid(x[:, 0])
+        tag_map = x[:, 1]
+        return heatmap, tag_map
 
 
-def split(xs, ys, ms, batch_size):
+def split(xs, ys, ms, cs, batch_size):
     assert len(xs) == len(ys)
     assert len(ys) == len(ms)
+    assert len(ms) == len(cs)
     n = len(xs)
     n_iter = math.ceil(n / batch_size)
     for i in range(n_iter):
         s = i * batch_size
         t = min(s + batch_size, n)
-        yield i, xs[s:t], ys[s:t], ms[s:t]
+        yield i, xs[s:t], ys[s:t], ms[s:t], cs[s:t]
 
 
-def train(net, xt, yt, mt, xv, yv, mv):
+def train(net, xt, yt, mt, ct, xv, yv, mv, cv):
     batch_size = 30
     n_epochs = 250
     ckpt_dir = ckpt.new_dir()
@@ -70,16 +73,17 @@ def train(net, xt, yt, mt, xv, yv, mv):
     def __train(ep, msg, pbar):
         net.train()
         msg.update({'loss': 0.0, 'loss_hm': 0.0, 'loss_tag': 0.0})
-        for i, xb, yb, mb in split(xt, yt, mt, batch_size):
+        for i, xb, yb, mb, cb in split(xt, yt, mt, ct, batch_size):
             xb = Variable(torch.from_numpy(xb).cuda(), requires_grad=True)
             yb = Variable(torch.from_numpy(yb).cuda(), requires_grad=False)
 
             optimizer.zero_grad()
-            yp = net(xb)
+            heatmap, tag_map = net(xb)
 
-            loss_hm = hm_loss(yp[:, 0, ...], yb[:, 0, ...])
-            loss_tag = tag_loss(yp[:, 1, ...], mb)
-            loss = loss_hm + 0.5 * loss_tag
+            loss_hm = hm_loss(heatmap, yb[:, 0, ...])
+            loss_tag = tag_loss(tag_map, cb, pbar=False)
+            # print(loss_tag)
+            loss = loss_hm + loss_tag
             loss.backward()
             optimizer.step()
 

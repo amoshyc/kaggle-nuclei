@@ -31,7 +31,9 @@ def read_masks(img_paths, size=(448, 448), pbar=True):
             img = Image.open(mask_path)
             img = img.convert('L')
             img = img.resize(size)
-            cur_masks.append(np.uint8(img) / 255)
+            img = np.uint8(img)
+            if img.max() > 0:
+                cur_masks.append(img / 255)
         all_masks.append(cur_masks)
 
     return all_masks
