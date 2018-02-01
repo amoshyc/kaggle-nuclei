@@ -47,3 +47,31 @@ def fuse_masks(all_masks, size=(448, 448), pbar=True):
             ys[i, mask > 0, 0] = 1.0
     
     return ys
+
+
+def sample_points_from_mask(mask, n_points):
+    rr, cc = np.nonzero(mask > 0)
+    if len(rr) < n_points:
+        indices = np.random.random_integers(0, len(rr) - 1, n_points)
+    else:
+        indices = np.arange(len(rr))
+        np.random.shuffle(indices)
+        indices = indices[:n_points]
+    return rr[indices], cc[indices]
+
+
+def sample_points(all_masks, n_points=5, pbar=True):
+    if pbar:
+        all_masks = tqdm(all_masks, desc='Sampling Points')
+
+    res = []
+    for cur_masks in all_masks:
+        pts = np.zeros((len(cur_masks), 2, n_points), dtype=np.uint8)
+        for i, mask in enumerate(cur_masks):
+            rr, cc = sample_points_from_mask(mask, n_points)
+            pts[i, 0, :] = rr
+            pts[i, 1, :] = cc
+        res.append(pts)
+    
+    return res
+
