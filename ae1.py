@@ -17,8 +17,9 @@ from nuclei.models import ae1
 img_paths = list(config.TRAIN1.glob('*/images/*.png'))
 xs, ss = read_imgs(img_paths)
 ms = read_masks(img_paths)
+bs = to_border(ms)
 ys = fuse_masks(ms)
-cs = sample_points(ms, n_points=25)
+cs = sample_points(bs, n_points=30)
 
 
 xs = np.transpose(xs, (0, 3, 1, 2))

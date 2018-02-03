@@ -2,6 +2,8 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image
 
+from skimage.segmentation import find_boundaries
+
 
 def read_imgs(img_paths, size=(448, 448), pbar=True):
     if pbar:
@@ -49,6 +51,18 @@ def fuse_masks(all_masks, size=(448, 448), pbar=True):
             ys[i, mask > 0, 0] = 1.0
     
     return ys
+
+
+def to_border(all_masks, pbar=True):
+    if pbar:
+        all_masks = tqdm(all_masks, desc='To Border')
+    
+    res = []
+    for cur_masks in all_masks:
+        borders = [np.uint8(find_boundaries(mask, mode='thick')) for mask in cur_masks]
+        res.append(borders)
+    return res
+
 
 
 def sample_points_from_mask(mask, n_points):
