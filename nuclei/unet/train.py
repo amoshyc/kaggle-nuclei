@@ -23,7 +23,9 @@ class UNetTrainer(object):
         self.criterion = nn.BCELoss()
         self.optimizer = optim.Adam(self.model.parameters())
         self.ckpt_dir = util.new_ckpt_dir()
-        self.log = dict()
+        self.log = None
+
+        print('CKPT:', self.ckpt_dir)
 
     def __train(self, ep, msg, pbar):
         batch_size = 10
@@ -59,13 +61,18 @@ class UNetTrainer(object):
         pbar.update(batch_size)
 
     def __log(self, ep, msg, pbar):
-        self.log[ep] = msg
+        if ep == 0 or msg['val_loss'] < self.log['val_loss'].min():
+            with (self.ckpt_dir / 'model.pth').open('wb') as f:
+                T.save(self.model, f)
 
-        df = pd.DataFrame.from_dict(self.log, orient='index')
-        df.to_csv(str(self.ckpt_dir / 'log.csv'), index_label='epoch')
+        if self.log is None:
+            self.log = pd.DataFrame([msg])
+        else:
+            self.log = self.log.append(msg, ignore_index=True)
+        self.log.to_csv(str(self.ckpt_dir / 'log.csv'), index_label='epoch')
 
         fig, ax = plt.subplots(dpi=150)
-        df.plot(kind='line', ax=ax)
+        self.log.plot(kind='line', ax=ax)
         ax.set_xlabel('epoch')
         ax.set_ylabel('loss')
         fig.tight_layout()
