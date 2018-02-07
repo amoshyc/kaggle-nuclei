@@ -50,7 +50,8 @@ class UNetTrainer(object):
         batch_size = 5
         msg.update({'val_loss': 0.0})
         self.model.eval()
-        for i, (xb, yb) in enumerate(util.make_batch(self.xv, self.yv, bs=batch_size)):
+        for i, (xb, yb) in enumerate(
+                util.make_batch(self.xv, self.yv, bs=batch_size)):
             xb = Variable(xb.cuda(), requires_grad=False)
             yb = Variable(yb.cuda(), requires_grad=False)
 
@@ -58,7 +59,6 @@ class UNetTrainer(object):
             loss = self.criterion(out, yb)
             msg['val_loss'] = (msg['val_loss'] * i + loss.data[0]) / (i + 1)
         pbar.set_postfix(**msg)
-        pbar.update(batch_size)
 
     def __log(self, ep, msg, pbar):
         if ep == 0 or msg['val_loss'] < self.log['val_loss'].min():
