@@ -2,6 +2,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from PIL import Image
 from skimage import transform
 from skimage import measure
 from skimage import color
@@ -54,19 +55,10 @@ class Predictor(object):
 
 
 def test_label():
-    x = np.float32([
-        [1, 1, 0, 0],
-        [0, 0, 0, 1],
-        [1, 0, 1, 0],
-        [0, 0, 1, 1]
-    ])
+    x = np.zeros((100, 100), dtype=np.float32)
+    x[20:40, 30:70] = 1.0
+    x[50:60, 60:80] = 1.0
     labeled, num = measure.label(x > 0.5, return_num=True)
-    print('labeled:')
-    print(labeled)
-    print('num:', num)
-    for i in range(1, num + 1):
-        mask = np.uint8(labeled == i)
-        print('mask', i, ':')
-        print(mask)
-    vis = color.label2rgb(labeled, x)
-    io.imsave('./vis.jpg', vis)
+    assert num == 2
+    vis = color.label2rgb(labeled, x, alpha=0.5, bg_label=0)
+    Image.fromarray(np.uint8(vis * 255)).save('./vis.jpg')
