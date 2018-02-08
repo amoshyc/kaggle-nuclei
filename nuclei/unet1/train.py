@@ -15,14 +15,14 @@ import torch.optim as optim
 from .. import util
 
 
-class UNetTrainer(object):
-    def __init__(self, model):
+class Trainer(object):
+    def __init__(self, model, ckpt_dir):
         super().__init__()
         self.model = model
         self.n_epochs = 250
         self.criterion = nn.BCELoss()
         self.optimizer = optim.Adam(self.model.parameters())
-        self.ckpt_dir = util.new_ckpt_dir()
+        self.ckpt_dir = ckpt_dir
         self.log = None
 
         print('CKPT:', self.ckpt_dir)
@@ -92,12 +92,12 @@ class UNetTrainer(object):
 
         for i, (x, yt, yp) in enumerate(zip(xvis, yvis, yp)):
             fig, axes = plt.subplots(nrows=1, ncols=3, dpi=100)
-            for ax in axes:
-                ax.axis('off')
             axes[0].imshow(x)
             axes[1].imshow(yt[..., 0], cmap='gray')
             axes[2].imshow(yp[..., 0], cmap='jet')
-            fig.tight_layout()
+            for ax in axes:
+                ax.axis('off')
+            fig.tight_layout(bbox_inches='tight')
             fig.savefig(str(epoch_dir / f'{i:03d}.jpg'))
             plt.close()
 
