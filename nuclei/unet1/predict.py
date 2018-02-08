@@ -39,8 +39,8 @@ class Predictor(object):
                     img_size = Image.open(p).size
                     fused = transform.resize(y[..., 0], img_size)
                     labeled, num = measure.label(fused > 0.5, return_num=True)
-                    for i in range(num):
-                        mask = np.uint8(labeled == num)
+                    for i in range(1, num+1):
+                        mask = np.uint8(labeled == i)
                         df = df.append({
                             'ImageId': p.stem, 
                             'EncodedPixels': util.rle_encode(mask),
@@ -61,8 +61,10 @@ def test_label():
         [0, 0, 1, 1]
     ])
     labeled, num = measure.label(x > 0.5, return_num=True)
+    print('labeled:')
+    print(labeled)
     print('num:', num)
-    for i in range(num):
+    for i in range(1, num + 1):
         mask = np.uint8(labeled == i)
         print('mask', i, ':')
         print(mask)
