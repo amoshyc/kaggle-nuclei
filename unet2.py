@@ -25,8 +25,12 @@ from nuclei import util
 
 # xs = np.transpose(xs, (0, 3, 1, 2))
 # ys = np.transpose(ys, (0, 3, 1, 2))
-# xt, xv, yt, yv = train_test_split(xs, ys, test_size=0.2)
-# np.savez('./data/data.npz', xt=xt, yt=yt, xv=xv, yv=yv)
+# xt, xv, yt, yv, pt, pv = train_test_split(xs, ys, test_size=0.2)
+# np.savez('./data/data.npz', xt=xt, yt=yt, xv=xv, yv=yv, pt=pt, pv=pv)
+
+# data = np.load('./data/data.npz')
+# xt, yt, pt = data['xt'], data['yt'], data['pt']
+# xv, yv, pv = data['xv'], data['yv'], data['pv']
 
 # data = np.load('./data/data.npz')
 # xt, yt, xv, yv = data['xt'], data['yt'], data['xv'], data['yv']

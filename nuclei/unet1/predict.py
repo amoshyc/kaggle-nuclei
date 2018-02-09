@@ -15,14 +15,14 @@ from .. import util
 
 
 class Predictor(object):
-    def __init__(self, model, target_dir):
+    def __init__(self, model, ckpt_dir):
         super().__init__()
         self.model = model.cuda()
-        self.batch_size = 10
-        self.target_dir = pathlib.Path(target_dir)
-        self.target_dir.mkdir(exist_ok=True)        
+        self.batch_size = 5
+        self.target_dir = ckpt_dir / 'pred'
+        self.target_dir.mkdir(exist_ok=True)
 
-    def predict(self, xs, ps, plot=True):
+    def fit(self, xs, ps, plot=True):
         '''
             xs: ndarray with shape (N, C, W, H)
             ps: list of image paths corresponding to xs
@@ -33,25 +33,30 @@ class Predictor(object):
         self.model.eval()
         with tqdm(total=len(xs), ascii=True) as pbar:
             for xb, pb in util.make_batch(xs, ps, bs=self.batch_size):
-                xb = Variable(xb.cuda(), requres_grad=False)
-                yb = self.model(xb).cpu().data.numpy()
+                xb_var = Variable(xb.cuda(), requires_grad=False)
+                yb_var = self.model(xb_var)
+                xb = np.transpose(xb_var.cpu().data.numpy(), [0, 2, 3, 1])
+                yb = np.transpose(yb_var.cpu().data.numpy(), [0, 2, 3, 1])
+
                 for x, y, p in zip(xb, yb, pb):
+                    # PLOT
+                    if plot:
+                        labeled, num = measure.label(y[..., 0] > 0.5, return_num=True)
+                        rgb = color.label2rgb(labeled, x, bg_label=0, alpha=0.2)
+                        util.make_vis([x, rgb], (self.target_dir / f'{p.stem}vis.jpg'))
+
                     # RLE
                     img_size = Image.open(p).size
-                    fused = transform.resize(y[..., 0], img_size)
-                    labeled, num = measure.label(fused > 0.5, return_num=True)
+                    y = transform.resize(y[..., 0], img_size, mode='reflect')
+                    labeled, num = measure.label(y > 0.5, return_num=True)
                     for i in range(1, num+1):
                         mask = np.uint8(labeled == i)
                         df = df.append({
                             'ImageId': p.stem, 
                             'EncodedPixels': util.rle_encode(mask),
                         }, ignore_index=True)
-                    # PLOT
-                    if plot:
-                        vis = color.label2rgb(labeled, x)
-                        io.imsave(str(self.target_dir / f'{p.stem}vis.jpg'), vis)
                 pbar.update(self.batch_size)
-        df.to_csv(str(self.target_dir / 'unet1.csv'))
+        df.to_csv(str(self.target_dir / 'pred.csv'), index=False)
 
 
 def test_label():

@@ -99,7 +99,7 @@ class UNetTrainer(object):
             for r in range(2):
                 for c in range(2):
                     axes[r, c].axis('off')
-            fig.tight_layout(bbox_inches='tight')
+            fig.tight_layout()
             fig.savefig(str(epoch_dir / f'{i:03d}.jpg'))
             plt.close()
 

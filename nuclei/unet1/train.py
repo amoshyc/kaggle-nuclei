@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from skimage import color
+from skimage import measure
 
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
@@ -63,7 +65,7 @@ class Trainer(object):
     def __log(self, ep, msg, pbar):
         if ep == 0 or msg['val_loss'] < self.log['val_loss'].min():
             with (self.ckpt_dir / 'model.pth').open('wb') as f:
-                T.save(self.model, f)
+                T.save(self.model.state_dict(), f)
 
         if self.log is None:
             self.log = pd.DataFrame([msg])
@@ -86,20 +88,16 @@ class Trainer(object):
         xs = Variable(self.xvis.cuda(), requires_grad=False)
         yp = self.model(xs).cpu().data.numpy()
 
-        xvis = np.transpose(self.xvis, [0, 2, 3, 1])
-        yvis = np.transpose(self.yvis, [0, 2, 3, 1])
+        xvis = np.transpose(self.xvis.numpy(), [0, 2, 3, 1])
+        yvis = np.transpose(self.yvis.numpy(), [0, 2, 3, 1])
         yp = np.transpose(yp, [0, 2, 3, 1])
 
-        for i, (x, yt, yp) in enumerate(zip(xvis, yvis, yp)):
-            fig, axes = plt.subplots(nrows=1, ncols=3, dpi=100)
-            axes[0].imshow(x)
-            axes[1].imshow(yt[..., 0], cmap='gray')
-            axes[2].imshow(yp[..., 0], cmap='jet')
-            for ax in axes:
-                ax.axis('off')
-            fig.tight_layout(bbox_inches='tight')
-            fig.savefig(str(epoch_dir / f'{i:03d}.jpg'))
-            plt.close()
+        for i, (x, yt, pr) in enumerate(zip(xvis, yvis, yp)):
+            rgb_yt = np.concatenate([yt, yt, yt], axis=-1)
+            rgb_pr = np.concatenate([pr, pr, pr], axis=-1)
+            label = measure.label(pr > 0.5)[..., 0]
+            rgb_mk = color.label2rgb(label, None, bg_label=0, alpha=0.2)
+            util.make_grid([x, rgb_yt, rgb_pr, rgb_mk], 2, 2, str(epoch_dir / f'{i:03d}.jpg'))
 
     def fit(self, xt, yt, xv, yv):
         '''

@@ -1,6 +1,7 @@
 from math import ceil
 
 import numpy as np
+from PIL import Image
 
 from . import config
 
@@ -27,9 +28,29 @@ def make_batch(*arrs, bs):
         yield tuple(arr[s:t] for arr in arrs)
 
 
-def rle_encode(img, threshold=0.5):
-    flat_img = img.ravel()
-    flat_img = np.where(flat_img > threshold, 1, 0).astype(np.uint8)
+def make_vis(arr, path):
+    '''
+        arr: list of float rgb ndarray (0 ~ 1)
+    '''
+    vis = np.uint8(np.hstack(arr) * 255)
+    Image.fromarray(vis).save(str(path))
+
+
+def make_grid(arr, nrows, ncols, path):
+    '''
+        arr: list of float rgb ndarray (0 ~ 1)
+    '''
+    rows = []
+    for r in range(nrows):
+        s = r * ncols
+        t = min(s + ncols, len(arr))
+        rows.append(np.hstack(arr[s:t]))
+    vis = np.uint8(np.vstack(rows) * 255)
+    Image.fromarray(vis).save(str(path))
+
+
+def rle_encode(img):
+    flat_img = np.uint8(img).ravel()
     flat_img = np.insert(flat_img, [0, len(flat_img)], [0, 0])
 
     starts = np.array((flat_img[:-1] == 0) & (flat_img[1:] == 1))
@@ -53,5 +74,5 @@ def test_make_batch():
 def test_rle_encode():
     img = np.array([[1.0, 1.0, 0.8, 0.7], [1.0, 0.2, 0.3, 0.2],
                     [1.0, 1.0, 0.0, 0.0], [0.6, 0.6, 0.1, 0.1]])
-    assert rle_encode(img, threshold=0.5) == '1 5 9 2 13 2'
+    assert rle_encode(img > 0.5) == '1 5 9 2 13 2'
     print('Pass')
