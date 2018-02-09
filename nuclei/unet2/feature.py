@@ -39,7 +39,7 @@ def read_masks(img_paths, size=(448, 448), pbar=None):
 def fuse_masks(all_masks, size=(448, 448), pbar=None):
     '''
         ys.shape = (N, W, H, 2) where 
-        ys[..., 0] = internel mask
+        ys[..., 0] = fused
         ys[..., 1] = contour mask
     '''
     if pbar:
@@ -47,9 +47,10 @@ def fuse_masks(all_masks, size=(448, 448), pbar=None):
     ys = np.zeros((len(all_masks), *size, 2), dtype=np.float32)
     for i, masks in enumerate(all_masks):
         for mask in masks:
-            internal_mask = binary_erosion(mask)
-            contour_mask = (mask - internal_mask) > 0
-            ys[i, internal_mask, 0] = 1.0
+            mask = (mask > 0)
+            internal_mask = binary_erosion(mask, iterations=2)
+            contour_mask = (mask & (~internal_mask))
+            ys[i, mask, 0] = 1.0
             ys[i, contour_mask, 1] = 1.0
     return ys
 
@@ -58,7 +59,7 @@ def test_fuse_masks():
     mask1 = np.zeros((10, 10))
     mask1[:4, :4] = 1
     mask2 = np.zeros((10, 10))
-    mask2[4:8, :] = 1
+    mask2[4:10, :] = 1
     masks = np.float32((mask1 == 1) | (mask2 == 1))
     print('masks:')
     print(masks)

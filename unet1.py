@@ -27,9 +27,9 @@ from nuclei.unet1.train import *
 # xs = np.transpose(xs, (0, 3, 1, 2))
 # ys = np.transpose(ys, (0, 3, 1, 2))
 # xt, xv, yt, yv, pt, pv = train_test_split(xs, ys, ps, test_size=0.2)
-# np.savez('./data/data.npz', xt=xt, yt=yt, xv=xv, yv=yv, pt=pt, pv=pv)
+# np.savez('./data/unet1.npz', xt=xt, yt=yt, xv=xv, yv=yv, pt=pt, pv=pv)
 
-data = np.load('./data/data.npz')
+data = np.load('./data/unet1.npz')
 # xt, yt, pt = data['xt'], data['yt'], data['pt']
 xv, yv, pv = data['xv'], data['yv'], data['pv']
 

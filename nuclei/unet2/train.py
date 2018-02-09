@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from skimage import color
+from skimage import measure
 
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
@@ -13,14 +15,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from .. import util
+from . import predict
 
 
-class UNetTrainer(object):
+class Trainer(object):
     def __init__(self, model, ckpt_dir):
         super().__init__()
         self.model = model
         self.n_epochs = 250
-        self.criterion = nn.BCELoss()
+        self.loss_segment = nn.MSELoss()
+        self.loss_contour = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters())
         self.ckpt_dir = ckpt_dir
         self.log = None
@@ -29,7 +33,7 @@ class UNetTrainer(object):
 
     def __train(self, ep, msg, pbar):
         batch_size = 10
-        msg.update({'loss': 0.0})
+        msg.update({'loss': 0.0, 'loss_s': 0.0, 'loss_c': 0.0})
         self.model.train()
         for i, (xb, yb) in enumerate(
                 util.make_batch(self.xt, self.yt, bs=batch_size)):
@@ -38,17 +42,21 @@ class UNetTrainer(object):
 
             self.optimizer.zero_grad()
             out = self.model(xb)
-            loss = self.criterion(out, yb)
+            loss_s = self.loss_segment(out[:, 0], yb[:, 0])
+            loss_c = self.loss_contour(out[:, 1], yb[:, 1])
+            loss = 0.1 * loss_s + loss_c
             loss.backward()
             self.optimizer.step()
 
             msg['loss'] = (msg['loss'] * i + loss.data[0]) / (i + 1)
+            msg['loss_s'] = (msg['loss_s'] * i + loss_s.data[0]) / (i + 1)
+            msg['loss_c'] = (msg['loss_c'] * i + loss_c.data[0]) / (i + 1)
             pbar.set_postfix(**msg)
             pbar.update(batch_size)
 
     def __valid(self, ep, msg, pbar):
         batch_size = 5
-        msg.update({'val_loss': 0.0})
+        msg.update({'val_loss': 0.0, 'val_loss_s': 0.0, 'val_loss_c': 0.0})
         self.model.eval()
         for i, (xb, yb) in enumerate(
                 util.make_batch(self.xv, self.yv, bs=batch_size)):
@@ -56,14 +64,21 @@ class UNetTrainer(object):
             yb = Variable(yb.cuda(), requires_grad=False)
 
             out = self.model(xb)
-            loss = self.criterion(out, yb)
+            loss_s = self.loss_segment(out[:, 0], yb[:, 0])
+            loss_c = self.loss_contour(out[:, 1], yb[:, 1])
+            loss = 0.1 * loss_s + loss_c
+
             msg['val_loss'] = (msg['val_loss'] * i + loss.data[0]) / (i + 1)
+            msg['val_loss_s'] = (msg['val_loss_s'] * i + loss_s.data[0]) / (
+                i + 1)
+            msg['val_loss_c'] = (msg['val_loss_c'] * i + loss_c.data[0]) / (
+                i + 1)
         pbar.set_postfix(**msg)
 
     def __log(self, ep, msg, pbar):
         if ep == 0 or msg['val_loss'] < self.log['val_loss'].min():
             with (self.ckpt_dir / 'model.pth').open('wb') as f:
-                T.save(self.model, f)
+                T.save(self.model.state_dict(), f)
 
         if self.log is None:
             self.log = pd.DataFrame([msg])
@@ -86,22 +101,18 @@ class UNetTrainer(object):
         xs = Variable(self.xvis.cuda(), requires_grad=False)
         yp = self.model(xs).cpu().data.numpy()
 
-        xvis = np.transpose(self.xvis, [0, 2, 3, 1])
-        yvis = np.transpose(self.yvis, [0, 2, 3, 1])
-        yp = np.transpose(yp, [0, 2, 3, 1])
+        xvis = np.transpose(self.xvis.numpy(), [0, 2, 3, 1])
+        yvis = np.transpose(self.yvis.numpy(), [0, 2, 3, 1])
+        yps = np.transpose(yp, [0, 2, 3, 1])
 
-        for i, (x, yt, yp) in enumerate(zip(xvis, yvis, yp)):
-            fig, axes = plt.subplots(nrows=2, ncols=2, dpi=150)
-            axes[0, 0].imshow(x)
-            axes[0, 1].imshow(yt[..., 0], cmap='gray')
-            axes[1, 0].imshow(yp[..., 0], cmap='jet')
-            axes[1, 2].imshow(yp[..., 1], cmap='jet')
-            for r in range(2):
-                for c in range(2):
-                    axes[r, c].axis('off')
-            fig.tight_layout()
-            fig.savefig(str(epoch_dir / f'{i:03d}.jpg'))
-            plt.close()
+        for i, (x, yt, yp) in enumerate(zip(xvis, yvis, yps)):
+            rgb_ti = color.gray2rgb(yt[..., 0])
+            rgb_tc = color.gray2rgb(yt[..., 1])
+            rgb_pi = color.gray2rgb(yp[..., 0])
+            rgb_pc = color.gray2rgb(yp[..., 1])
+            rgb_mask = predict.colorize(yp)
+            util.make_grid([x, rgb_ti, rgb_tc, rgb_pi, rgb_pc, rgb_mask], 2, 3,
+                           str(epoch_dir / f'{i:03d}.jpg'))
 
     def fit(self, xt, yt, xv, yv):
         '''

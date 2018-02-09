@@ -6,7 +6,6 @@ from PIL import Image
 from skimage import transform
 from skimage import measure
 from skimage import color
-from skimage import io
 
 import torch as T
 from torch.autograd import Variable
