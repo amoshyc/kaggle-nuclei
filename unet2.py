@@ -34,6 +34,6 @@ xv, yv, pv = data['xv'], data['yv'], data['pv']
 
 model = UNet()
 
-ckpt_dir = util.new_ckpt_dir()
+ckpt_dir = util.new_ckpt_dir() # m00010
 trainer = Trainer(model, ckpt_dir)
 trainer.fit(xt, yt, xv, yv)

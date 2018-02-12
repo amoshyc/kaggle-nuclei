@@ -40,12 +40,14 @@ def make_grid(arr, nrows, ncols, path):
     '''
         arr: list of float rgb ndarray (0 ~ 1)
     '''
-    rows = []
-    for r in range(nrows):
-        s = r * ncols
-        t = min(s + ncols, len(arr))
-        rows.append(np.hstack(arr[s:t]))
-    vis = np.uint8(np.vstack(rows) * 255)
+    assert len(arr) > 0
+    h, w, _ = arr[0].shape
+    for x in arr:
+        assert x.shape[:2] == (h, w)
+    vis = np.zeros((h * nrows, w * ncols, 3), dtype=np.uint8)
+    for i, x in enumerate(arr):
+        r, c = divmod(i, ncols)
+        vis[(r * h):(r * h + h), (c * w):(c * w + w)] = np.uint8(x * 255)
     Image.fromarray(vis).save(str(path))
 
 
